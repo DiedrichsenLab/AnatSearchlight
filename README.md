@@ -1,5 +1,5 @@
 # AnatSearchlight
-This repository includes code to run a searchlight analysis on functional MRI data using python. The pipeline includes two main steps: 
+This repository includes code to run anatomically informed searchlight analysis on functional MRI data using python. The pipeline includes two main steps: 
 
 - define_searchlight.py: this script defines the searchlight sphere and saves the sphere indices in a .npy file?
 
