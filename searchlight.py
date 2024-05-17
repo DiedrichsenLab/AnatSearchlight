@@ -30,7 +30,7 @@ class SearchlightROI(Searchlight):
     def __init__(self):
         pass
 
-class Searchlight(Searchlight):
+class SearchlightSURF(Searchlight):
     def __init__(self):
         pass
 class SearchlightSet(Searchlight):
