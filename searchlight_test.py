@@ -125,7 +125,7 @@ class SurfaceSearchlight:
 def surfing_nodeidxs2coords(cs1, cs2, idxs=None, linedef=None):
     """
     Maps vertex indices from two surfaces to coordinates.
-    
+
     Parameters:
     cs1 : ndarray
         3xN coordinates for N nodes for the first surface.
@@ -137,26 +137,26 @@ def surfing_nodeidxs2coords(cs1, cs2, idxs=None, linedef=None):
         1x3 vector [S, MN, MAX] specifying that S steps are taken along the
         lines from nodes on cs1 to cs2. MN and MAX are relative indices, where 0
         corresponds to cs1 and 1 to cs2. Default is [5, 0, 1].
-    
+
     Returns:
     CS : ndarray
         3xSxP array, where CS[:, I, J] are the coordinates for the I-th step
         on the line connecting the nodes on cs1 and cs2 with index idxs[J].
     """
-    
+
     # Ensure the input matrices are correctly oriented
     if cs1.shape[0] != 3:
         cs1 = cs1.T
     if cs2.shape[0] != 3:
         cs2 = cs2.T
-    
+
     if cs1.shape != cs2.shape:
         raise ValueError('Number of vertices in surfaces do not match, or not 3xQ matrices')
-    
+
     # Use all nodes if idxs is not provided
     if idxs is None or not isinstance(idxs, (np.ndarray, list, tuple)):
         idxs = np.arange(cs1.shape[1])
-    
+
     # Select nodes
     cs1 = cs1[:, idxs]
     cs2 = cs2[:, idxs]
@@ -201,11 +201,11 @@ import numpy as np
 def surfing_uniqueidxsperrow(x):
     """
     Returns unique indices per row.
-    
+
     Parameters:
     x : ndarray
         NxPxQ array, where N is the number of rows, P is the number of steps, and Q is the number of nodes.
-    
+
     Returns:
     y : ndarray
         NxMxQ array, M<=P, where each row contains the unique
@@ -216,7 +216,7 @@ def surfing_uniqueidxsperrow(x):
     """
     if x.ndim != 3:
         raise ValueError("Input array must be 3-dimensional")
-    
+
     nrows, nsteps, nnodes = x.shape
     y = np.zeros((nrows, nsteps, nnodes))
 
@@ -238,7 +238,7 @@ def surfing_uniqueidxsperrow(x):
     y = y[:, :max_nonzero_cols, :]
     return y
 
-    
+
 def readSurf(white_files,pial_files):
 # def readSurf(white_files,pial_files, names=['L','R']):
     # white: list of file names of white matter surface, e.g., 'fs_LR.32k.L.white.surf.gii'
@@ -252,7 +252,7 @@ def readSurf(white_files,pial_files):
 
     # for i, name in enumerate(names):
     #     S[name, 'topo'] = white[i].darrays[1]
-    #     S[name, 'white'] = white[i].darrays[0] 
+    #     S[name, 'white'] = white[i].darrays[0]
     #     S[name, 'pial'] = pial[i].darrays[0]
     return S
 
