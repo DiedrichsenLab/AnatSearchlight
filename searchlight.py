@@ -4,7 +4,7 @@ within the defined structures.
 
 created on 2024-05-16
 
-Author: Bassel Arafat
+Author: Diedrichsenlab
 """
 
 import numpy as np
@@ -73,32 +73,41 @@ class SearchlightVolume(Searchlight):
     def define(self):
         """ Computes the voxel list for a Volume-based searchlight."""
         i,j,k = np.where(self.roi_img.get_fdata())
-        self.center_indx = np.array([i,j,k])
+        self.center_indx = np.array([i,j,k]).astype('int16')
         self.n_cent = len(i)
         center_coords = nt.affine_transform_mat(self.center_indx,self.affine)
 
         if self.mask_img is not None:
             i,j,k = np.where(self.mask_img.get_fdata())
-            voxel_indx = np.array([i,j,k]).T
-            voxel_coords = nt.affine_transform_mat(voxel_coords_indx,self.affine)
+            voxel_indx = np.array([i,j,k]).astype('int16')
+            voxel_coords = nt.affine_transform_mat(voxel_indx,self.affine)
         else:
+            voxel_indx = self.center_indx
             voxel_coords = center_coords
-        linvoxel_idx = np.ravel_multi_index(voxel_coords.T,self.shape)
+
+        linvoxel_indx = np.ravel_multi_index(voxel_indx,self.shape).astype('int32')
 
         self.voxlist = []
-        self.voxmin = np.zeros((self.n_cent,3)) # Bottom left voxel
-        self.voxmax = np.zeros((self.n_cent,3))
+        self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
+        self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
+        self.maxdist = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
-            dist = nt.euclidean_dist_sq(center_coords[:,i],voxel_coords)
+            if np.mod(i,1000)==0:
+                print(f"Processing center {i} of {self.n_cent}")
+            dist = nt.euclidean_dist_sq(center_coords[:,i],voxel_coords).squeeze()
             if self.nvoxels is None:
-                self.voxels.append(linvoxel_idx[dist<self.radius])
+                vi=np.where([dist<(self.radius**2)])[0]
             elif self.radius is None:
-                self.voxels.append(linvoxel_idx[np.argsort(dist)[:self.nvoxels]])
+                vi=np.argsort(dist)[:self.nvoxels]
             else:
-                lv = linvoxel_idx[dist<self.radius]
-                self.voxels.append(lv[:min(self.nvoxels,len(lv))])
-
+                vi = np.where(dist<(self.radius**2))[0]
+                if len(vi)>self.nvoxels:
+                    vi=np.argsort(dist[vi])[:self.nvoxels]
+            self.voxlist.append(linvoxel_indx[vi])
+            self.voxmin[i,:] = np.min(voxel_coords[:,vi],axis=1)
+            self.voxmax[i,:] = np.max(voxel_coords[:,vi],axis=1)
+            self.maxdist[i] = np.max(dist[vi])
         pass
 
         """
