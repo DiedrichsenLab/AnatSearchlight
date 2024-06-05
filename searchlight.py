@@ -12,7 +12,24 @@ import pandas as pd
 import nibabel as nb
 import nilearn as nl
 import nitools as nt
+import h5py # For IO with HDF5 files
 
+
+def load(fname):
+    """Loads a searchlight definition from an HDF5 file
+
+    Args:
+        fname (str): Filename
+
+    Returns:
+        Searchlight: Searchlight object
+    """
+    with h5py.File(fname, 'r') as hf:
+        a = hf.get('classname')
+        S = Searchlight(hf.get('affine'),hf.get('shape'))
+        S.load(hf)
+        hf.close()
+    return S
 
 class Searchlight:
     """Base class for searchlight analyses. This class implements the basic behaviors of a searchlight.
@@ -26,12 +43,30 @@ class Searchlight:
         """ Computes the voxel list for a searchlight. Needs to be implemented by the child class."""
         pass
 
+    def load(self,hf):
+        """Loads all obligatory fields from the h5 file
+
+        Args:
+            hf (h5py.file): h5 file object (opened in read mode)
+        """
+
+
     def save(self,fname):
         """Saves the defined searchlight definition to hd5 file
         Args:
             fname (str): Filename
         """
-        pass
+        with h5py.File(fname, 'w') as hf:
+            hf.create_dataset('affine', data=self.affine)
+            hf.create_dataset('shape', data=self.shape)
+            hf.create_dataset('classname' = self.classname)
+            hf.create_dataset('structure', data=self.structure)
+            hf.create_dataset('center_indx', data=self.center_indx)
+            hf.create_dataset('voxlist', data=self.voxlist)
+            hf.create_dataset('voxmin', data=self.voxmin)
+            hf.create_dataset('voxmax', data=self.voxmax)
+            hf.create_dataset('maxdist', data=self.maxdist)
+            hf.close()
 
     def run(self):
         pass
@@ -40,7 +75,7 @@ class SearchlightVolume(Searchlight):
     """ Anatomically informed searchlights for 3d volumes, given an ROI image.
     Voxels we picked from the mask_img, if an extra mask_image is provided.
     """
-    def __init__(self,roi_img,mask_img=None,radius=5,nvoxels=None):
+    def __init__(self,roi_img,mask_img=None,radius=5,nvoxels=None,structure='none'):
         """Constructor for SearchlightVolume with either fixed radius or fixed number of voxels.
         If both a set to a value, nvoxels is used up to a maximum of the radius.
 
@@ -68,6 +103,8 @@ class SearchlightVolume(Searchlight):
             self.mask_img = None
         self.radius = radius
         self.nvoxels = nvoxels
+        self.classname ='SearchlightVolume'
+        self.structure = structure
         super().__init__(self.roi_img.affine,self.roi_img.shape)
 
     def define(self):
@@ -108,61 +145,6 @@ class SearchlightVolume(Searchlight):
             self.voxmin[i,:] = np.min(voxel_coords[:,vi],axis=1)
             self.voxmax[i,:] = np.max(voxel_coords[:,vi],axis=1)
             self.maxdist[i] = np.max(dist[vi])
-        pass
-
-        """
-        li          = cell(ncent,1);        % linear indices for voxels
-        n           = zeros(ncent,1);       % Number of voxels
-        rs          = zeros(ncent,1);       % Searchlight radius
-        voxmin      = zeros(ncent,1);       % bottom left voxel
-        voxmax      = zeros(ncent,1);       % top right voxel
-
-
-        %% 4. Estimate linear indices, voxmin/voxmax for a sphere centered at each center index
-        spm_progress_bar('Init',100);
-        for k=1:ncent
-            ds = surfing_eucldist(c_centers(:,k),c_voxels);
-            if fixedradius
-                a       = voxels(:,ds<radius);
-                rs(k,1) = radius;
-            else
-                i       = find(ds<radius(1));
-                [dss,j] = sort(ds(i));
-                indx    = min(targetvoxelcount,length(i)); % In case there are not enough voxels within maximal radius
-                a       = voxels(:,i(j(1:indx)));
-                rs(k,1) = dss(indx);
-            end;
-            n(k,1)          = size(a,2);
-            voxmin(k,1:3)   = min(a,[],2)';
-            voxmax(k,1:3)   = max(a,[],2)';
-            li{k,1}         = surfing_subs2inds(inclMask.dim,a(1:3,:)')';
-            n(k,1)          = numel(li{k});
-
-            spm_progress_bar('set',(k/ncent)*100);
-        end;
-
-
-        %% 5. Setting output
-        L.LI        = li;
-        L.voxmin    = voxmin;
-        L.voxmax    = voxmax;
-        L.voxel     = centeridxs;
-
-
-        %% 6. Cleanung & writing out exclusion mask
-        Vin(1) = Mask;
-        Vin(2) = inclMask;
-        Vo     = Vin(1);
-        Vo.fname =  'exclMask.nii';
-        % exclMask        = spm_imcalc({Mask.fname; inclMask.fname},'exclMask.nii','((i1>0)-(i2>0)>0)');
-        exclMask        = spm_imcalc(Vin,Vo,'((i1>0)-(i2>0)>0)');
-        exclMask.data   = spm_read_vols(exclMask);
-        try
-            delete('inclMask.nii');
-        catch
-        end;
-        """
-
 
 class SearchlightSurface(Searchlight):
     def __init__(self):
