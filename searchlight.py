@@ -35,8 +35,6 @@ class Searchlight:
     """Base class for searchlight analyses. This class implements the basic behaviors of a searchlight.
     """
     def __init__(self,affine,shape):
-        self.affine = affine # Affine transformation matrix of data and output space
-        self.shape = shape   # Shape of the data and output space
         pass
 
     def define(self):
@@ -57,10 +55,10 @@ class Searchlight:
             fname (str): Filename
         """
         with h5py.File(fname, 'w') as hf:
-            hf.create_dataset('affine', data=self.affine)
-            hf.create_dataset('shape', data=self.shape)
             hf.create_dataset('classname' = self.classname)
             hf.create_dataset('structure', data=self.structure)
+            hf.create_dataset('affine', data=self.affine)
+            hf.create_dataset('shape', data=self.shape)
             hf.create_dataset('center_indx', data=self.center_indx)
             hf.create_dataset('voxlist', data=self.voxlist)
             hf.create_dataset('voxmin', data=self.voxmin)
@@ -75,7 +73,7 @@ class SearchlightVolume(Searchlight):
     """ Anatomically informed searchlights for 3d volumes, given an ROI image.
     Voxels we picked from the mask_img, if an extra mask_image is provided.
     """
-    def __init__(self,roi_img,mask_img=None,radius=5,nvoxels=None,structure='none'):
+    def __init__(self,structure='none'):
         """Constructor for SearchlightVolume with either fixed radius or fixed number of voxels.
         If both a set to a value, nvoxels is used up to a maximum of the radius.
 
@@ -85,6 +83,11 @@ class SearchlightVolume(Searchlight):
             radius (float): Maximum searchlight radius - set to None if you want a fixed number of voxels
             nvoxels (int): Number of voxels in the searchlight.
         """
+        self.classname ='SearchlightVolume'
+        self.structure = structure
+
+    def define(self,roi_img,mask_img=None,radius=5,nvoxels=None):
+        """ Computes the voxel list for a Volume-based searchlight."""
         if isinstance(roi_img,str):
             self.roi_img = nb.load(roi_img)
         elif isinstance(roi_img,nb.Nifti1Image):
@@ -103,12 +106,8 @@ class SearchlightVolume(Searchlight):
             self.mask_img = None
         self.radius = radius
         self.nvoxels = nvoxels
-        self.classname ='SearchlightVolume'
-        self.structure = structure
-        super().__init__(self.roi_img.affine,self.roi_img.shape)
 
-    def define(self):
-        """ Computes the voxel list for a Volume-based searchlight."""
+
         i,j,k = np.where(self.roi_img.get_fdata())
         self.center_indx = np.array([i,j,k]).astype('int16')
         self.n_cent = len(i)
@@ -128,6 +127,8 @@ class SearchlightVolume(Searchlight):
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
         self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
         self.maxdist = np.zeros(self.n_cent)
+        self.affine = roi_img.affine # Affine transformation matrix of data and output space
+        self.shape = roi_img.shape   # Shape of the data and output space
 
         for i in range(self.n_cent):
             if np.mod(i,1000)==0:
@@ -145,6 +146,8 @@ class SearchlightVolume(Searchlight):
             self.voxmin[i,:] = np.min(voxel_coords[:,vi],axis=1)
             self.voxmax[i,:] = np.max(voxel_coords[:,vi],axis=1)
             self.maxdist[i] = np.max(dist[vi])
+
+
 
 class SearchlightSurface(Searchlight):
     def __init__(self):
