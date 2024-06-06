@@ -20,13 +20,18 @@ def load(fname):
 
     Args:
         fname (str): Filename
-
     Returns:
         Searchlight: Searchlight object
     """
     with h5py.File(fname, 'r') as hf:
-        a = hf.get('classname')
-        S = Searchlight(hf.get('affine'),hf.get('shape'))
+        classname = hf.get('classname').asstr()[()]
+        structure = hf.get('structure').asstr()[()]
+        if classname == 'SearchlightVolume':
+            S = SearchlightVolume(structure)
+        elif classname == 'SearchlightSurface':
+            S = SearchlightSurface(structure)
+        else:
+            raise ValueError(f"Classname {classname} not recognized")
         S.load(hf)
         hf.close()
     return S
@@ -34,8 +39,6 @@ def load(fname):
 class Searchlight:
     """Base class for searchlight analyses. This class implements the basic behaviors of a searchlight.
     """
-    def __init__(self,affine,shape):
-        pass
 
     def define(self):
         """ Computes the voxel list for a searchlight. Needs to be implemented by the child class."""
@@ -47,6 +50,15 @@ class Searchlight:
         Args:
             hf (h5py.file): h5 file object (opened in read mode)
         """
+        self.affine= np.array(hf.get('affine'))
+        self.shape = np.array(hf.get('shape'))
+        self.center_indx = np.array(hf.get('center_indx'))
+        self.voxlist = []
+        for i in range(len(hf.get('voxlist'))):
+            self.voxlist.append(np.array(hf.get(f'voxlist/voxlist_{i}')))
+        self.voxmin = np.array(hf.get('voxmin'))
+        self.voxmax = np.array(hf.get('voxmax'))
+        self.maxdist = np.array(hf.get('maxdist'))
 
 
     def save(self,fname):
@@ -55,18 +67,21 @@ class Searchlight:
             fname (str): Filename
         """
         with h5py.File(fname, 'w') as hf:
-            hf.create_dataset('classname' = self.classname)
+            hf.create_dataset('classname',data = self.classname)
             hf.create_dataset('structure', data=self.structure)
             hf.create_dataset('affine', data=self.affine)
             hf.create_dataset('shape', data=self.shape)
             hf.create_dataset('center_indx', data=self.center_indx)
-            hf.create_dataset('voxlist', data=self.voxlist)
+            grp = hf.create_group('voxlist')
+            for i in range(len(self.voxlist)):
+                grp.create_dataset(f'voxlist_{i}', data=self.voxlist[i])
             hf.create_dataset('voxmin', data=self.voxmin)
             hf.create_dataset('voxmax', data=self.voxmax)
             hf.create_dataset('maxdist', data=self.maxdist)
             hf.close()
 
     def run(self):
+        """ Conducts a searchlight analysis for all the searchlights defined in vox_list."""
         pass
 
 class SearchlightVolume(Searchlight):
@@ -106,6 +121,8 @@ class SearchlightVolume(Searchlight):
             self.mask_img = None
         self.radius = radius
         self.nvoxels = nvoxels
+        self.affine = self.roi_img.affine # Affine transformation matrix of data and output space
+        self.shape = self.roi_img.shape   # Shape of the data and output space
 
 
         i,j,k = np.where(self.roi_img.get_fdata())
@@ -127,8 +144,6 @@ class SearchlightVolume(Searchlight):
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
         self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
         self.maxdist = np.zeros(self.n_cent)
-        self.affine = roi_img.affine # Affine transformation matrix of data and output space
-        self.shape = roi_img.shape   # Shape of the data and output space
 
         for i in range(self.n_cent):
             if np.mod(i,1000)==0:
@@ -146,8 +161,6 @@ class SearchlightVolume(Searchlight):
             self.voxmin[i,:] = np.min(voxel_coords[:,vi],axis=1)
             self.voxmax[i,:] = np.max(voxel_coords[:,vi],axis=1)
             self.maxdist[i] = np.max(dist[vi])
-
-
 
 class SearchlightSurface(Searchlight):
     def __init__(self):
