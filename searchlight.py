@@ -53,13 +53,14 @@ class Searchlight:
         self.affine= np.array(hf.get('affine'))
         self.shape = np.array(hf.get('shape'))
         self.center_indx = np.array(hf.get('center_indx'))
+        self.voxel_indx = np.array(hf.get('voxel_indx'))
         self.voxlist = []
         for i in range(len(hf.get('voxlist'))):
             self.voxlist.append(np.array(hf.get(f'voxlist/voxlist_{i}')))
         self.voxmin = np.array(hf.get('voxmin'))
         self.voxmax = np.array(hf.get('voxmax'))
         self.maxdist = np.array(hf.get('maxdist'))
-
+        self.n_cent = self.center_indx.shape[1]
 
     def save(self,fname):
         """Saves the defined searchlight definition to hd5 file
@@ -72,6 +73,7 @@ class Searchlight:
             hf.create_dataset('affine', data=self.affine)
             hf.create_dataset('shape', data=self.shape)
             hf.create_dataset('center_indx', data=self.center_indx)
+            hf.create_dataset('voxel_indx', data=self.voxel_indx)
             grp = hf.create_group('voxlist')
             for i in range(len(self.voxlist)):
                 grp.create_dataset(f'voxlist_{i}', data=self.voxlist[i])
@@ -80,9 +82,51 @@ class Searchlight:
             hf.create_dataset('maxdist', data=self.maxdist)
             hf.close()
 
-    def run(self):
+    def run(self,inputfiles,mvpa_function,function_args={}):
         """ Conducts a searchlight analysis for all the searchlights defined in vox_list."""
-        pass
+        # Load the header from all the input files
+        input_vols = [nb.load(f) for f in inputfiles]
+
+        # Sample only the voxels that we require
+        data = np.empty((len(input_vols),self.voxel_indx.shape[1]))
+        for i,v in enumerate(input_vols):
+            for j in range(self.voxel_indx.shape[1]):
+                data[i,j] = v.dataobj[self.voxel_indx[0,j],self.voxel_indx[1,j],self.voxel_indx[2,j]]
+
+        # Call the mvpa function
+        results = []
+        for i in range(self.center_indx.shape[1]):
+            local_data = data[:,self.voxlist[i]]
+            results.append(mvpa_function(local_data,**function_args))
+        results = np.array(results)
+        return results
+
+    def save_results(self,results,outfilename):
+        """Save the results from a single searchlight to file
+        Args:
+            results (np.array): Results of the searchlight analysis
+            outfilenames (str): Filename
+        """
+        if results.shape[0] != self.n_cent:
+            raise ValueError(f"Results must have the same number of elements as the number of searchlights ({self.n_cent})")
+
+        # Put the data into a 4d-matrix
+        shp = np.append(self.shape,results.shape[1])
+        results_img = np.zeros(shp,dtype='float32')
+        results_img[self.center_indx[0,:],self.center_indx[1,:],self.center_indx[2,:]] = results
+
+        # First deal with a single 4d-nifti as an output
+        if outfilename is str:
+            img = nb.Nifti1Image(results_img,self.affine)
+            img.to_filename(outfilename)
+        else:
+            if results.shape[1] != len(outfilename):
+                raise ValueError(f"Results must have the same number of elements as the number of output files ({len(outfilename)})")
+            for i,outn in enumerate(outfilename):
+                img= nb.Nifti1Image(results_img[:,:,:,i],self.affine)
+                img.to_filename(outn)
+
+
 
 class SearchlightVolume(Searchlight):
     """ Anatomically informed searchlights for 3d volumes, given an ROI image.
@@ -132,13 +176,11 @@ class SearchlightVolume(Searchlight):
 
         if self.mask_img is not None:
             i,j,k = np.where(self.mask_img.get_fdata())
-            voxel_indx = np.array([i,j,k]).astype('int16')
-            voxel_coords = nt.affine_transform_mat(voxel_indx,self.affine)
+            self.voxel_indx = np.array([i,j,k]).astype('int16')
+            voxel_coords = nt.affine_transform_mat(self.voxel_indx,self.affine)
         else:
-            voxel_indx = self.center_indx
+            self.voxel_indx = self.center_indx
             voxel_coords = center_coords
-
-        linvoxel_indx = np.ravel_multi_index(voxel_indx,self.shape).astype('int32')
 
         self.voxlist = []
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
@@ -157,15 +199,15 @@ class SearchlightVolume(Searchlight):
                 vi = np.where(dist<(self.radius**2))[0]
                 if len(vi)>self.nvoxels:
                     vi=np.argsort(dist[vi])[:self.nvoxels]
-            self.voxlist.append(linvoxel_indx[vi])
-            self.voxmin[i,:] = np.min(voxel_coords[:,vi],axis=1)
-            self.voxmax[i,:] = np.max(voxel_coords[:,vi],axis=1)
+            self.voxlist.append(vi.astype('uint32'))
+            self.voxmin[i,:] = np.min(self.voxel_indx[:,vi],axis=1)
+            self.voxmax[i,:] = np.max(self.voxel_indx[:,vi],axis=1)
             self.maxdist[i] = np.max(dist[vi])
 
 class SearchlightSurface(Searchlight):
     def __init__(self):
         pass
 
-class SearchlightSet(Searchlight):
+class SearchlightSet():
     def __init__(self,list_of_searchlights):
         pass
