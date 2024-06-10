@@ -10,7 +10,6 @@ Author: Diedrichsenlab
 import numpy as np
 import pandas as pd
 import nibabel as nb
-import nilearn as nl
 import nitools as nt
 import h5py # For IO with HDF5 files
 
