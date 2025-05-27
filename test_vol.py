@@ -19,6 +19,6 @@ def test_run_searchlight():
 
 
 if __name__ == '__main__':
-    # test_define_searchlight()
-    test_run_searchlight()
+    test_define_searchlight()
+    #test_run_searchlight()
     pass

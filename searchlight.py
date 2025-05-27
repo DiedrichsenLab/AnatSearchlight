@@ -169,9 +169,9 @@ class SearchlightVolume(Searchlight):
 
 
         i,j,k = np.where(self.roi_img.get_fdata())
-        self.center_indx = np.array([i,j,k]).astype('int16')
-        self.n_cent = len(i)
-        center_coords = nt.affine_transform_mat(self.center_indx,self.affine)
+        self.center_indx = np.array([i,j,k]).astype('int16') # Index of each center
+        self.n_cent = len(i) # number of centers
+        center_coords = nt.affine_transform_mat(self.center_indx,self.affine) # coordinates of each center
 
         if self.mask_img is not None:
             i,j,k = np.where(self.mask_img.get_fdata())
