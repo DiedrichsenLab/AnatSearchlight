@@ -49,11 +49,11 @@ class Searchlight:
         Args:
             hf (h5py.file): h5 file object (opened in read mode)
         """
-        self.affine= np.array(hf.get('affine'))
-        self.shape = np.array(hf.get('shape'))
-        self.center_indx = np.array(hf.get('center_indx'))
-        self.voxel_indx = np.array(hf.get('voxel_indx'))
-        self.voxlist = []
+        self.affine= np.array(hf.get('affine')) # Affine matrix for functional space
+        self.shape = np.array(hf.get('shape'))  # shape of functional image
+        self.center_indx = np.array(hf.get('center_indx')) # Center indices (voxel or vertex)
+        self.voxel_indx = np.array(hf.get('voxel_indx')) # voxel indices of candidate voxels
+        self.voxlist = []  # List of indices into voxel_indx
         for i in range(len(hf.get('voxlist'))):
             self.voxlist.append(np.array(hf.get(f'voxlist/voxlist_{i}')))
         self.voxmin = np.array(hf.get('voxmin'))
@@ -82,7 +82,19 @@ class Searchlight:
             hf.close()
 
     def run(self,inputfiles,mvpa_function,function_args={}):
-        """ Conducts a searchlight analysis for all the searchlights defined in vox_list."""
+        """ Conducts a searchlight analysis for all the searchlights defined in vox_list.
+
+        Args:
+            inputfiles (list):
+                List of filenames
+            mvpa_fumction (fcn):
+            function_args (dictionary):
+        Returns:
+            results (ndarray):
+                Either one-dimensional or two-dimensional ndarray. First dimension is
+                the number of centers.
+        """
+
         # Load the header from all the input files
         input_vols = [nb.load(f) for f in inputfiles]
 
@@ -103,19 +115,31 @@ class Searchlight:
     def save_results(self,results,outfilename):
         """Save the results from a single searchlight to file
         Args:
-            results (np.array): Results of the searchlight analysis
-            outfilenames (str): Filename
+            results (np.array):
+                Results of the searchlight analysis
+                Can either be one-dimensional (n_centers,)
+                Or two-dimensional (n_centers,n_results), 4d nifti
+            outfilenames (str):
+                file name of .nii file or dscalar.nii (cifti) file
         """
         if results.shape[0] != self.n_cent:
             raise ValueError(f"Results must have the same number of elements as the number of searchlights ({self.n_cent})")
 
         # Put the data into a 4d-matrix
-        shp = np.append(self.shape,results.shape[1])
-        results_img = np.zeros(shp,dtype='float32')
+        if (results.ndim ==1):
+            result_size=1
+        else:
+            result_size = results.shape[1]
+        if result_size==1:
+            img_shape = self.shape
+        else:
+            img_shape = np.append(self.shape,result_size)
+
+        results_img = np.zeros(img_shape,dtype='float32')*np.nan
         results_img[self.center_indx[0,:],self.center_indx[1,:],self.center_indx[2,:]] = results
 
         # First deal with a single 4d-nifti as an output
-        if outfilename is str:
+        if outfilename[-3:] == 'nii':
             img = nb.Nifti1Image(results_img,self.affine)
             img.to_filename(outfilename)
         else:
@@ -124,8 +148,6 @@ class Searchlight:
             for i,outn in enumerate(outfilename):
                 img= nb.Nifti1Image(results_img[:,:,:,i],self.affine)
                 img.to_filename(outn)
-
-
 
 class SearchlightVolume(Searchlight):
     """ Anatomically informed searchlights for 3d volumes, given an ROI image.
@@ -136,16 +158,26 @@ class SearchlightVolume(Searchlight):
         If both a set to a value, nvoxels is used up to a maximum of the radius.
 
         Args:
-            roi_img (filename of NiftiImage): ROI image (or file name) to define output and searchlight locations
-            mask_img (filename or NiftiImage): Mask image to define input space, By default the ROI image is used. Defaults to None.
-            radius (float): Maximum searchlight radius - set to None if you want a fixed number of voxels
-            nvoxels (int): Number of voxels in the searchlight.
+            structure (str):
+                structure name for the cifti file (e.g. 'cerebellum', 'left_hem', etc.).
         """
         self.classname ='SearchlightVolume'
         self.structure = structure
 
     def define(self,roi_img,mask_img=None,radius=5,nvoxels=None):
-        """ Computes the voxel list for a Volume-based searchlight."""
+        """ Calculates the voxel_list for a Volume-based searchlight .
+
+        Args:
+            roi_img (filename or NiftiImage):
+                ROI binary mask image to define searchlight centers. Same space as the later input data.
+            mask_img (filename or NiftiImage):
+                Mask image to define input space (voxels to be used in the searchlight),
+                By default (None) the ROI image is used here as well. Should be in the same space as the later input data.
+            radius (float):
+                Maximum searchlight radius - set to None if you only want a fixed number of voxels
+            nvoxels (int):
+                Number of voxels in the searchlight. If not given, the searchlight will be defined by a constant radius.
+        """
         if isinstance(roi_img,str):
             self.roi_img = nb.load(roi_img)
         elif isinstance(roi_img,nb.Nifti1Image):
@@ -162,17 +194,20 @@ class SearchlightVolume(Searchlight):
                 raise ValueError("mask_img must be a filename or Nifti1Image")
         else:
             self.mask_img = None
+
+        # record the other parameters
         self.radius = radius
         self.nvoxels = nvoxels
         self.affine = self.roi_img.affine # Affine transformation matrix of data and output space
         self.shape = self.roi_img.shape   # Shape of the data and output space
 
-
+        # Define the center indices
         i,j,k = np.where(self.roi_img.get_fdata())
         self.center_indx = np.array([i,j,k]).astype('int16') # Index of each center
         self.n_cent = len(i) # number of centers
         center_coords = nt.affine_transform_mat(self.center_indx,self.affine) # coordinates of each center
 
+        # If a mask image is provided, we use the voxels from the mask image
         if self.mask_img is not None:
             i,j,k = np.where(self.mask_img.get_fdata())
             self.voxel_indx = np.array([i,j,k]).astype('int16')
