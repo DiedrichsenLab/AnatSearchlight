@@ -107,7 +107,8 @@ class Searchlight:
         data = np.empty((len(input_vols),indx.shape[1]))
         for i,v in enumerate(input_vols):
             print(f"sampling only the voxels that we require from volume number {i+1}")
-            data[i,:] = v.dataobj[indx[0],indx[1],indx[2]]
+            D = v.get_fdata()
+            data[i,:] = D[indx[0],indx[1],indx[2]]
 
         # Call the mvpa function
         results = []

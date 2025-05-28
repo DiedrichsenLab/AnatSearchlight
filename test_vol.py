@@ -17,7 +17,7 @@ def test_define_searchlight():
 
 def test_run_searchlight_mean():
     datafiles = [f"data/sub-02_ses-s1_run-01_reg-{s:02d}_beta.nii" for s in range(5)]
-    S= sl.load('data/searchlight_new.h5')
+    S= sl.load('data/searchlight.h5')
     results = S.run(datafiles, mvpa_mean_function, )
     S.save_results(results,'data/output1.nii')
 
