@@ -88,7 +88,11 @@ class Searchlight:
             inputfiles (list):
                 List of filenames
             mvpa_fumction (fcn):
+                Function that takes input data (N x n_voxels) and returns a scalar or vector as result.
+                Function should be defined as:
+                def mvpa_function(data, **kwargs):
             function_args (dictionary):
+                Additional arguments to be passed to the mvpa_function as keyword arguments.
         Returns:
             results (ndarray):
                 Either one-dimensional or two-dimensional ndarray. First dimension is
