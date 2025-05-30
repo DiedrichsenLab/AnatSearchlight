@@ -14,8 +14,9 @@ def test_define_searchlight():
     mySearchlight = sl.SearchlightSurface('left_cortex')
     surf = ['example_data/sub-02_space-32k_hemi-L_pial.surf.gii',
             'example_data/sub-02_space-32k_hemi-L_white.surf.gii']
-    mask = 'example_data/sub-02_ses-s1_mask.nii'
-    mySearchlight.define(surf,mask,radius=20,nvoxels=None)
+    voxel_mask = 'example_data/sub-02_ses-s1_mask.nii'
+    roi_mask = 'example_data/tpl-fs32k_hemi-L_mask.label.gii'
+    mySearchlight.define(surf,voxel_mask,roi=roi_mask,radius=20,nvoxels=None)
     mySearchlight.save('example_data/searchlight_surf.h5')
 
 def test_run_searchlight_mean():
@@ -31,7 +32,7 @@ def test_run_searchlight_multi():
     S.data_to_cifti(results,outfilename='example_data/output2.dscalar.nii')
 
 if __name__ == '__main__':
-    # test_define_searchlight()
+    test_define_searchlight()
     test_run_searchlight_mean()
 
     pass

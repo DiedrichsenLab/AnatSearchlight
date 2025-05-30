@@ -44,12 +44,13 @@ class Searchlight:
         affine (ndarray): Affine transformation matrix of data and output space
         shape (tuple): Shape of the data and output space
         center_indx (ndarray): Voxel / vertex indices of the searchlight centers
-        voxel_indx (ndarray): 3 x P array of voxel indicices (i,j,k)
+        n_cent (int): Number of searchlight centers
+        voxel_indx (ndarray): 3 x P array of voxel indices in functional space (i,j,k)
         voxlist (list): List of voxel numbers (index into voxel_indx) for each searchlight center
         voxmin (ndarray): Minimum voxel indices for each searchlight center
         voxmax (ndarray): Maximum voxel indices for each searchlight center
         maxdist (ndarray): Maximum distance for each searchlight center
-        n_cent (int): Number of searchlight centers
+        nvoxels (int): Number of voxels in the searchlight
     """
 
     def define(self):
@@ -72,6 +73,7 @@ class Searchlight:
         self.voxmin = np.array(hf.get('voxmin'))
         self.voxmax = np.array(hf.get('voxmax'))
         self.maxdist = np.array(hf.get('maxdist'))
+        self.nvoxels = np.array(hf.get('nvoxels'))
         if self.center_indx.ndim == 1:
             self.n_cent = self.center_indx.shape[0]
         else:
@@ -98,6 +100,7 @@ class Searchlight:
             hf.create_dataset('voxmin', data=self.voxmin)
             hf.create_dataset('voxmax', data=self.voxmax)
             hf.create_dataset('maxdist', data=self.maxdist)
+            hf.create_dataset('nvoxels', data=self.nvoxels)
             if self.classname == 'SearchlightSurface':
                 hf.create_dataset('n_vertices', data=self.n_vertices)
             hf.close()
@@ -214,6 +217,7 @@ class SearchlightVolume(Searchlight):
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
         self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
         self.maxdist = np.zeros(self.n_cent)
+        self.nvoxels = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
             if (np.mod(i,1000)==0) and verbose:
@@ -231,6 +235,7 @@ class SearchlightVolume(Searchlight):
             self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
             self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
             self.maxdist[i] = np.max(dist[vn])
+            self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
 
     def data_to_nifti(self,results,outfilename = None):
         """ Returns as nifti file with the results of the searchlight analysis.
@@ -345,21 +350,29 @@ class SearchlightSurface(Searchlight):
                 self.center_indx = roi.astype('int16')
             else:
                 raise ValueError("roi must be a 1d array")
+        elif isinstance(roi,str):
+            roi= nb.load(roi)
+            if isinstance(roi,nb.gifti.GiftiImage):
+                self.center_indx = np.where(roi.darrays[0].data>0)[0].astype('int16')
+            else:
+                raise ValueError("roi image must be a GiftiImage ")
         else:
-            raise ValueError("Gitfi image ROI not implemented yet")
+            raise ValueError("roi must be a filename of GiftiImage or ndarray")
         self.n_cent = self.center_indx.shape[0] # number of centers
 
         # Get the indices for all the points being sampled
         # We get the unique voxels between the two surfaces (voxel_indx)
         # And the n_points x n_vertices numbers of voxels (voxels)
-        indices = np.zeros((self.n_points,self.n_vertices),dtype=int)
+        lin_indices = np.zeros((self.n_points,self.n_vertices),dtype=int)
         for i in range(self.n_points):
             c = (1-self.depths[i])*c1.T+self.depths[i]*c2.T
             linvoxind,good = nt.coords_to_linvidxs(c,self.mask_img,mask=True)
-            indices[i] = linvoxind.T
-        unique_voxels,vox_nums = np.unique(indices.flatten(),return_inverse=True)  # Remove duplicates
-        self.voxel_indx = np.stack(np.unravel_index(unique_voxels, self.mask_img.shape))
-        vox_nums = vox_nums.reshape(indices.shape)  # Reshape to original shape
+            linvoxind[~good] = -1  # Set invalid voxels to -1
+            lin_indices[i] = linvoxind.T
+        flat_lindx = lin_indices.flatten()
+        flat_lindx = flat_lindx[flat_lindx>-1]
+        unique_lindices = np.unique(flat_lindx)  # Remove duplicates
+        self.voxel_indx = np.stack(np.unravel_index(unique_lindices, self.mask_img.shape))
         # Compute mid-depth surface
         mid_depth = (c1 + c2) / 2
         midsurf = nno.Surface(mid_depth, f1)
@@ -369,6 +382,7 @@ class SearchlightSurface(Searchlight):
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
         self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
         self.maxdist = np.zeros(self.n_cent)
+        self.nvoxels = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
             if (np.mod(i,1000)==0) and verbose:
@@ -376,23 +390,30 @@ class SearchlightSurface(Searchlight):
             dist_dict = midsurf.dijkstra_distance(self.center_indx[i],radius)
             can_nodes = np.array([int(k) for k,v in dist_dict.items()])
             can_dist = np.array([np.double(v) for k,v in dist_dict.items()])
-            can_vox_nums = vox_nums[:,can_nodes].T.flatten()  # These are the voxels numbers sorted  by distance
+            can_lindicies = lin_indices[:,can_nodes].T.flatten()  # These are the voxels numbers sorted  by distance
             can_vox_dist = np.tile(can_dist,(self.n_points,1)).T.flatten()  # Distances to the voxels
-            _,vorder = np.unique(can_vox_nums,return_index=True)  # Remove duplicates and return index of closest occurrance
+            _,vorder = np.unique(can_lindicies,return_index=True)  # Remove duplicates and return index of closest occurrance
             vorder = np.sort(vorder)
-            can_voxels_sorted = can_vox_nums[vorder]  # Sorted voxels distance
+            can_linin_sorted = can_lindicies[vorder]  # Sorted voxels distance
             can_voxdist_sorted = can_vox_dist[vorder]  # Sorted distances to the voxels (along the surface)
+            # Remove voxels that are not in the mask
+            goodv = can_linin_sorted>-1
+            can_linin_sorted = can_linin_sorted[goodv]
+            can_voxdist_sorted = can_voxdist_sorted[goodv]
             if nvoxels is None: # take all the voxels within the radius
-                vi=can_voxels_sorted
+                vi=can_linin_sorted
                 maxdist = can_voxdist_sorted[-1]
             else:
-                vi = can_voxels_sorted[:nvoxels]
+                vi = can_linin_sorted[:nvoxels]
                 maxdist = can_voxdist_sorted[nvoxels-1]
 
-            self.voxlist.append(vi.astype('uint32'))
-            self.voxmin[i,:] = np.min(self.voxel_indx[:,vi],axis=1)
-            self.voxmax[i,:] = np.max(self.voxel_indx[:,vi],axis=1)
+            # Get the voxel numbers in the unique_lindices
+            vn = np.array([np.where(unique_lindices==v)[0][0] for v in vi],dtype ='uint32')
+            self.voxlist.append(vn)
+            self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
+            self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
             self.maxdist[i] = maxdist  # Maximum distance in the searchlight
+            self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
 
     def data_to_cifti(self,data,outfilename = None,row_names=None):
         """ Returns a CIFTI file with the results of the searchlight analysis.
