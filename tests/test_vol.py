@@ -1,4 +1,4 @@
-import searchlight as sl
+import AnatSearchlight as sl
 import numpy as np
 import nibabel as nib
 
@@ -12,23 +12,23 @@ def mvpa_multi_function(data):
 
 def test_define_searchlight():
     mySearchlight = sl.SearchlightVolume('cerebellum')
-    mySearchlight.define('example_data/sub-02_desc-cereb_mask.nii',radius=4,nvoxels=100)
-    mySearchlight.save('example_data/searchlight.h5')
+    mySearchlight.define('examples/sub-02_desc-cereb_mask.nii',maxradius=9,maxvoxels=10)
+    mySearchlight.save('examples/searchlight.h5')
 
 def test_run_searchlight_mean():
-    datafiles = [f"data/sub-02_ses-s1_run-01_reg-{s:02d}_beta.nii" for s in range(5)]
-    S= sl.load('data/searchlight_new.h5')
+    datafiles = [f"examples/sub-02_ses-s1_run-01_reg-{s:02d}_beta.nii" for s in range(5)]
+    S= sl.load('examples/searchlight_new.h5')
     results = S.run(datafiles, mvpa_mean_function, )
-    S.data_to_nifti(results,'example_data/output1.nii')
+    S.data_to_nifti(results,'examples/output1.nii')
 
 def test_run_searchlight_multi():
-    datafiles = [f"data/sub-02_ses-s1_run-01_reg-{s:02d}_beta.nii" for s in range(5)]
-    S= sl.load('data/searchlight.h5')
+    datafiles = [f"examples/sub-02_ses-s1_run-01_reg-{s:02d}_beta.nii" for s in range(5)]
+    S= sl.load('examples/searchlight.h5')
     results = S.run(datafiles, mvpa_multi_function, )
-    S.data_to_nifti(results,outfilename='example_data/output2.nii')
-
+    S.data_to_nifti(results,outfilename='examples/output2.nii')
 
 if __name__ == '__main__':
     test_define_searchlight()
     test_run_searchlight_mean()
+    test_run_searchlight_multi()
     pass

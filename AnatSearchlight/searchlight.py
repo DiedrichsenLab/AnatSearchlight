@@ -12,7 +12,7 @@ import pandas as pd
 import nibabel as nb
 import nitools as nt
 import h5py # For IO with HDF5 files
-import AnatSearchlight.pymvpa_surf as nno  # Nick Oosterhof's library for dijkstra distrance
+import AnatSearchlight.pymvpa_surf as nno  # Nick Oosterhof's library for dijkstra distance
 
 def load(fname):
     """Loads a searchlight definition from an HDF5 file
@@ -45,12 +45,14 @@ class Searchlight:
         shape (tuple): Shape of the data and output space
         center_indx (ndarray): Voxel / vertex indices of the searchlight centers
         n_cent (int): Number of searchlight centers
+        maxradius (float): Maximum distance from each searchlight center
+        maxvoxels (int): Maximum number of voxels in the searchlight
         voxel_indx (ndarray): 3 x P array of voxel indices in functional space (i,j,k)
         voxlist (list): List of voxel numbers (index into voxel_indx) for each searchlight center
         voxmin (ndarray): Minimum voxel indices for each searchlight center
         voxmax (ndarray): Maximum voxel indices for each searchlight center
-        maxdist (ndarray): Maximum distance for each searchlight center
-        nvoxels (int): Number of voxels in the searchlight
+        radius (ndarray): Effective radius for each searchlight center
+        nvoxels (ndarray): Number of voxels in the searchlight
     """
 
     def define(self):
@@ -67,6 +69,8 @@ class Searchlight:
         self.shape = np.array(hf.get('shape'))  # shape of functional image
         self.center_indx = np.array(hf.get('center_indx')) # Center indices (voxel or vertex)
         self.voxel_indx = np.array(hf.get('voxel_indx')) # voxel indices of candidate voxels
+        self.maxdist= np.array(hf.get('maxdist'))  # Maximum distance for each searchlight center
+        self.maxradius = np.max(self.maxdist)  # Maximum radius of the searchlight
         self.voxlist = []  # List of indices into voxel_indx
         for i in range(len(hf.get('voxlist'))):
             self.voxlist.append(np.array(hf.get(f'voxlist/voxlist_{i}')))
@@ -93,13 +97,15 @@ class Searchlight:
             hf.create_dataset('affine', data=self.affine)
             hf.create_dataset('shape', data=self.shape)
             hf.create_dataset('center_indx', data=self.center_indx)
+            hf.create_dataset('maxradius', data=self.maxradius)
+            hf.create_dataset('maxvoxels', data=self.maxvoxels)
             hf.create_dataset('voxel_indx', data=self.voxel_indx)
             grp = hf.create_group('voxlist')
             for i in range(len(self.voxlist)):
                 grp.create_dataset(f'voxlist_{i}', data=self.voxlist[i])
             hf.create_dataset('voxmin', data=self.voxmin)
             hf.create_dataset('voxmax', data=self.voxmax)
-            hf.create_dataset('maxdist', data=self.maxdist)
+            hf.create_dataset('radius', data=self.radius)
             hf.create_dataset('nvoxels', data=self.nvoxels)
             if self.classname == 'SearchlightSurface':
                 hf.create_dataset('n_vertices', data=self.n_vertices)
@@ -159,7 +165,7 @@ class SearchlightVolume(Searchlight):
         self.classname ='SearchlightVolume'
         self.structure = structure
 
-    def define(self,roi_img,mask_img=None,radius=5,nvoxels=None,verbose=True):
+    def define(self,roi_img,mask_img=None,maxradius=5,maxvoxels=np.inf,verbose=True):
         """ Calculates the voxel_list for a Volume-based searchlight .
 
         Args:
@@ -168,10 +174,10 @@ class SearchlightVolume(Searchlight):
             mask_img (filename or NiftiImage):
                 Mask image to define input space (voxels to be used in the searchlight),
                 By default (None) the ROI image is used here as well. Should be in the same space as the later input data.
-            radius (float):
-                Maximum searchlight radius - set to None if you only want a fixed number of voxels
-            nvoxels (int):
-                Number of voxels in the searchlight. If not given, the searchlight will be defined by a constant radius.
+            maxradius (float):
+                Maximum searchlight radius - set to np.inf if you only want a fixed number of voxels
+            maxvoxels (float):
+                Max number of voxels in the searchlight - set to np.inf if you want a fixed radius
             verbose (bool):
                 If True, print progress messages.
         """
@@ -193,8 +199,8 @@ class SearchlightVolume(Searchlight):
             self.mask_img = None
 
         # record the other parameters
-        self.radius = radius
-        self.nvoxels = nvoxels
+        self.maxradius = maxradius
+        self.maxvoxels = maxvoxels
         self.affine = self.roi_img.affine # Affine transformation matrix of data and output space
         self.shape = self.roi_img.shape   # Shape of the data and output space
 
@@ -217,24 +223,21 @@ class SearchlightVolume(Searchlight):
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
         self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
         self.maxdist = np.zeros(self.n_cent)
+        self.radius = np.zeros(self.n_cent)
         self.nvoxels = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
             if (np.mod(i,1000)==0) and verbose:
                 print(f"Processing center {i} of {self.n_cent}")
             dist = nt.euclidean_dist_sq(center_coords[:,i],voxel_coords).squeeze()
-            if self.nvoxels is None:
-                vn=np.where([dist<(self.radius**2)])[0]
-            elif self.radius is None:
-                vn=np.argsort(dist)[:self.nvoxels]
-            else:
-                vn = np.where(dist<(self.radius**2))[0]
-                if len(vn)>self.nvoxels:
-                    vn=np.argsort(dist[vn])[:self.nvoxels]
+            vn = np.where(dist<(self.maxradius**2))[0]
+            if len(vn)>self.maxvoxels:
+                ind=np.argsort(dist[vn])[:self.maxvoxels]
+                vn = vn[ind]
             self.voxlist.append(vn.astype('uint32'))
             self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
             self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
-            self.maxdist[i] = np.max(dist[vn])
+            self.radius[i] = np.sqrt(np.max(dist[vn]))
             self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
 
     def data_to_nifti(self,results,outfilename = None):
@@ -292,7 +295,7 @@ class SearchlightSurface(Searchlight):
 
 
 
-    def define(self,surfs,mask_img,roi=None,radius=10,nvoxels=None,verbose=True):
+    def define(self,surfs,mask_img,roi=None,maxradius=10,maxvoxels=np.inf,verbose=True):
         """ Calculates the voxel_list for a Volume-based searchlight .
 
         Args:
@@ -303,9 +306,9 @@ class SearchlightSurface(Searchlight):
             roi (filename, GiftiImage, ndrarray):
                 Define searchlight centers. If not given, the searchlight centers are calculated for all vertices.
             radius (float):
-                Maximum searchlight radius - set to None if you only want a fixed number of voxels
+                Maximum searchlight radius - set to a large value if you only want a fixed number of voxels
             nvoxels (int):
-                Number of voxels in the searchlight. If not given, the searchlight will be defined by a constant radius.
+                Number of voxels in the searchlight. set , the searchlight will be defined by a constant radius.
             verbose (bool):
                 If True, print progress messages.
         """
@@ -336,8 +339,8 @@ class SearchlightSurface(Searchlight):
             raise ValueError("roi_img must be a filename or Nifti1Image")
 
         # Record definition parameters:
-        self.radius = radius
-        self.nvoxels = nvoxels
+        self.maxradius = maxradius
+        self.maxvoxels = maxvoxels
         self.affine = self.mask_img.affine # Affine transformation matrix of data and output space
         self.shape = self.mask_img.shape   # Shape of the data and output space
         self.n_vertices = c1.shape[0]  # Number of vertices in the surface
@@ -381,13 +384,13 @@ class SearchlightSurface(Searchlight):
         self.voxlist = []  # List of indices into voxel_indx
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
         self.voxmax = np.zeros((self.n_cent,3),dtype='int16')
-        self.maxdist = np.zeros(self.n_cent)
+        self.radius = np.zeros(self.n_cent)
         self.nvoxels = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
             if (np.mod(i,1000)==0) and verbose:
                 print(f"Processing center {i} of {self.n_cent}")
-            dist_dict = midsurf.dijkstra_distance(self.center_indx[i],radius)
+            dist_dict = midsurf.dijkstra_distance(self.center_indx[i],self.maxradius)
             can_nodes = np.array([int(k) for k,v in dist_dict.items()])
             can_dist = np.array([np.double(v) for k,v in dist_dict.items()])
             can_lindicies = lin_indices[:,can_nodes].T.flatten()  # These are the voxels numbers sorted  by distance
@@ -400,19 +403,19 @@ class SearchlightSurface(Searchlight):
             goodv = can_linin_sorted>-1
             can_linin_sorted = can_linin_sorted[goodv]
             can_voxdist_sorted = can_voxdist_sorted[goodv]
-            if nvoxels is None: # take all the voxels within the radius
+            if maxvoxels is None: # take all the voxels within the radius
                 vi=can_linin_sorted
                 maxdist = can_voxdist_sorted[-1]
             else:
-                vi = can_linin_sorted[:nvoxels]
-                maxdist = can_voxdist_sorted[nvoxels-1]
+                vi = can_linin_sorted[:,maxvoxels]
+                maxdist = can_voxdist_sorted[maxvoxels-1]
 
             # Get the voxel numbers in the unique_lindices
             vn = np.array([np.where(unique_lindices==v)[0][0] for v in vi],dtype ='uint32')
             self.voxlist.append(vn)
             self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
             self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
-            self.maxdist[i] = maxdist  # Maximum distance in the searchlight
+            self.radius[i] = maxdist  # Maximum distance in the searchlight
             self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
 
     def data_to_cifti(self,data,outfilename = None,row_names=None):
