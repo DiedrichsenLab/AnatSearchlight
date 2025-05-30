@@ -74,8 +74,11 @@ class Searchlight:
         self.maxdist = np.array(hf.get('maxdist'))
         if self.center_indx.ndim == 1:
             self.n_cent = self.center_indx.shape[0]
-        else: 
+        else:
             self.n_cent = self.center_indx.shape[1]
+        if self.classname == 'SearchlightSurface':
+            self.n_vertices = np.array(hf.get('n_vertices')) # Affine matrix for functional space
+
 
     def save(self,fname):
         """Saves the defined searchlight definition to hd5 file
@@ -95,9 +98,11 @@ class Searchlight:
             hf.create_dataset('voxmin', data=self.voxmin)
             hf.create_dataset('voxmax', data=self.voxmax)
             hf.create_dataset('maxdist', data=self.maxdist)
+            if self.classname == 'SearchlightSurface':
+                hf.create_dataset('n_vertices', data=self.n_vertices)
             hf.close()
 
-    def run(self,inputfiles,mvpa_function,function_args={}):
+    def run(self,inputfiles,mvpa_function,function_args={},verbose=True):
         """ Conducts a searchlight analysis for all the searchlights defined in vox_list.
 
         Args:
@@ -120,6 +125,8 @@ class Searchlight:
 
         # Sample only the voxels that we require
         data = np.empty((len(input_vols),self.voxel_indx.shape[1]))
+        if verbose:
+            print(f"Loading data ")
         for i,v in enumerate(input_vols):
             for j in range(self.voxel_indx.shape[1]):
                 data[i,j] = v.dataobj[self.voxel_indx[0,j],self.voxel_indx[1,j],self.voxel_indx[2,j]]
@@ -127,6 +134,8 @@ class Searchlight:
         # Call the mvpa function
         results = []
         for i in range(self.n_cent):
+            if (np.mod(i,1000)==0) and verbose:
+                print(f"Calculating searchlight {i} of {self.n_cent}")
             local_data = data[:,self.voxlist[i]]
             results.append(mvpa_function(local_data,**function_args))
         results = np.array(results)
@@ -147,7 +156,7 @@ class SearchlightVolume(Searchlight):
         self.classname ='SearchlightVolume'
         self.structure = structure
 
-    def define(self,roi_img,mask_img=None,radius=5,nvoxels=None):
+    def define(self,roi_img,mask_img=None,radius=5,nvoxels=None,verbose=True):
         """ Calculates the voxel_list for a Volume-based searchlight .
 
         Args:
@@ -160,6 +169,8 @@ class SearchlightVolume(Searchlight):
                 Maximum searchlight radius - set to None if you only want a fixed number of voxels
             nvoxels (int):
                 Number of voxels in the searchlight. If not given, the searchlight will be defined by a constant radius.
+            verbose (bool):
+                If True, print progress messages.
         """
         if isinstance(roi_img,str):
             self.roi_img = nb.load(roi_img)
@@ -205,7 +216,7 @@ class SearchlightVolume(Searchlight):
         self.maxdist = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
-            if np.mod(i,1000)==0:
+            if (np.mod(i,1000)==0) and verbose:
                 print(f"Processing center {i} of {self.n_cent}")
             dist = nt.euclidean_dist_sq(center_coords[:,i],voxel_coords).squeeze()
             if self.nvoxels is None:
@@ -221,15 +232,16 @@ class SearchlightVolume(Searchlight):
             self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
             self.maxdist[i] = np.max(dist[vn])
 
-    def to_nifti(self,results):
+    def data_to_nifti(self,results,outfilename = None):
         """ Returns as nifti file with the results of the searchlight analysis.
         Args:
             results (np.array):
                 Results of the searchlight analysis
                 Can either be one-dimensional (n_centers,) -> 3d nifti
                 Or two-dimensional (n_centers,n_results) -> 4d nifti
-
-        Returns 
+            outfilename (str):
+                Filename to save the nifti image to. If None, the image is returned, but not saved.
+        Returns
             img (nb.Nifti1Image):
                 Nifti image with the results of the searchlight analysis.
         """
@@ -251,6 +263,8 @@ class SearchlightVolume(Searchlight):
 
         # First deal with a single 4d-nifti as an output
         img = nb.Nifti1Image(results_img,self.affine)
+        if outfilename is not None:
+            nb.save(img,outfilename)
         return img
 
 class SearchlightSurface(Searchlight):
@@ -271,7 +285,9 @@ class SearchlightSurface(Searchlight):
         self.depths = np.array(depths)  # Depth for sampling
         self.n_points = len(self.depths)  # Number of points to sample
 
-    def define(self,surfs,mask_img,roi=None,radius=10,nvoxels=None):
+
+
+    def define(self,surfs,mask_img,roi=None,radius=10,nvoxels=None,verbose=True):
         """ Calculates the voxel_list for a Volume-based searchlight .
 
         Args:
@@ -285,13 +301,15 @@ class SearchlightSurface(Searchlight):
                 Maximum searchlight radius - set to None if you only want a fixed number of voxels
             nvoxels (int):
                 Number of voxels in the searchlight. If not given, the searchlight will be defined by a constant radius.
+            verbose (bool):
+                If True, print progress messages.
         """
         # Get the two surfaces
         if not isinstance(surfs,list):
             raise ValueError("surfs must be a list")
         self.surfs = surfs
         surfaces = [nb.load(f) for f in surfs]
-        
+
 
         # Check that the surfaces are compatible
         if len(surfaces) != 2:
@@ -303,7 +321,6 @@ class SearchlightSurface(Searchlight):
         f1 = surfaces[0].darrays[1].data
         if c2.shape[0] != c1.shape[0]:
             raise ValueError("Surfaces must have the same number of vertices")
-        self.n_vertices = c1.shape[0]  # Number of vertices in the surface
 
         # Get the mask image
         if isinstance(mask_img,str):
@@ -313,11 +330,12 @@ class SearchlightSurface(Searchlight):
         else:
             raise ValueError("roi_img must be a filename or Nifti1Image")
 
-        # Record definition parameters: 
+        # Record definition parameters:
         self.radius = radius
         self.nvoxels = nvoxels
         self.affine = self.mask_img.affine # Affine transformation matrix of data and output space
         self.shape = self.mask_img.shape   # Shape of the data and output space
+        self.n_vertices = c1.shape[0]  # Number of vertices in the surface
 
         # Use the roi defition
         if (roi is None):
@@ -353,7 +371,7 @@ class SearchlightSurface(Searchlight):
         self.maxdist = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
-            if np.mod(i,1000)==0:
+            if (np.mod(i,1000)==0) and verbose:
                 print(f"Processing center {i} of {self.n_cent}")
             dist_dict = midsurf.dijkstra_distance(self.center_indx[i],radius)
             can_nodes = np.array([int(k) for k,v in dist_dict.items()])
@@ -362,7 +380,7 @@ class SearchlightSurface(Searchlight):
             can_vox_dist = np.tile(can_dist,(self.n_points,1)).T.flatten()  # Distances to the voxels
             _,vorder = np.unique(can_vox_nums,return_index=True)  # Remove duplicates and return index of closest occurrance
             vorder = np.sort(vorder)
-            can_voxels_sorted = can_vox_nums[vorder]  # Sorted voxels distance 
+            can_voxels_sorted = can_vox_nums[vorder]  # Sorted voxels distance
             can_voxdist_sorted = can_vox_dist[vorder]  # Sorted distances to the voxels (along the surface)
             if nvoxels is None: # take all the voxels within the radius
                 vi=can_voxels_sorted
@@ -376,17 +394,36 @@ class SearchlightSurface(Searchlight):
             self.voxmax[i,:] = np.max(self.voxel_indx[:,vi],axis=1)
             self.maxdist[i] = maxdist  # Maximum distance in the searchlight
 
-    def to_cifti(self,results):
+    def data_to_cifti(self,data,outfilename = None,row_names=None):
         """ Returns a CIFTI file with the results of the searchlight analysis.
         Args:
             results (np.array):
-                Results of the searchlight analysis
-                Can either be one-dimensional or two-dimensional (n_centers,n_results) -> 4d cifti
+                Results of the searchlight analysis (ncenters,n_results).
+                Can either be one-dimensional or two-dimensional
             """
-        if results.ndim == 1:
-            results = results.reshape((-1,1))
-        if results.shape[0] != self.n_cent:
+        # check if the results are in the right size
+        if data.ndim == 1:
+            data = data.reshape((-1,1))
+        if data.shape[0] != self.n_cent:
             raise ValueError(f"Results must have the same number of elements as the number of searchlights ({self.n_cent})")
+
+        # Use vertex mask to create a BrainModelAxis
+        vertex_mask = np.zeros((self.n_vertices,),dtype='bool')
+        vertex_mask[self.center_indx] = True
+        bm = nb.cifti2.BrainModelAxis.from_mask(vertex_mask, name=self.structure)
+
+        # Make the ScalarAxis
+        if row_names is None:
+            row_names = [f"row {r:03}" for r in range(data.shape[1])]
+        row_axis = nb.cifti2.ScalarAxis(row_names)
+
+        header = nb.Cifti2Header.from_axes((row_axis, bm))
+        cifti_img = nb.Cifti2Image(dataobj=data.T, header=header)
+
+        # Save if requested
+        if outfilename is not None:
+            nb.save(cifti_img, outfilename)
+        return cifti_img
 
 
 class SearchlightSet():
