@@ -16,7 +16,7 @@ def test_define_searchlight():
             'examples/sub-02_space-32k_hemi-L_white.surf.gii']
     voxel_mask = 'examples/sub-02_ses-s1_mask.nii'
     roi_mask = 'examples/tpl-fs32k_hemi-L_mask.label.gii'
-    mySearchlight.define(surf,voxel_mask,roi=roi_mask,maxradius=20,maxvoxels=None)
+    mySearchlight.define(surf,voxel_mask,roi=roi_mask,maxradius=20,maxvoxels=100)
     mySearchlight.save('examples/searchlight_surf.h5')
 
 def test_run_searchlight_mean():
@@ -27,7 +27,7 @@ def test_run_searchlight_mean():
 
 def test_run_searchlight_multi():
     datafiles = [f"examples/sub-02_ses-s1_run-01_reg-{s:02d}_beta.nii" for s in range(5)]
-    S= sl.load('example_data/searchlight_surf.h5')
+    S= sl.load('examples/searchlight_surf.h5')
     results = S.run(datafiles, mvpa_multi_function)
     S.data_to_cifti(results,outfilename='examples/output2.dscalar.nii')
 

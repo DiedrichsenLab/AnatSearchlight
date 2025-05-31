@@ -12,7 +12,7 @@ def mvpa_multi_function(data):
 
 def test_define_searchlight():
     mySearchlight = sl.SearchlightVolume('cerebellum')
-    mySearchlight.define('examples/sub-02_desc-cereb_mask.nii',maxradius=9,maxvoxels=10)
+    mySearchlight.define('examples/sub-02_desc-cereb_mask.nii',maxradius=9,maxvoxels=100)
     mySearchlight.save('examples/searchlight.h5')
 
 def test_run_searchlight_mean():

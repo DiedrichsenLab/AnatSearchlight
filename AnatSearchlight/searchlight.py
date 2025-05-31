@@ -76,7 +76,7 @@ class Searchlight:
             self.voxlist.append(np.array(hf.get(f'voxlist/voxlist_{i}')))
         self.voxmin = np.array(hf.get('voxmin'))
         self.voxmax = np.array(hf.get('voxmax'))
-        self.maxdist = np.array(hf.get('maxdist'))
+        self.radius = np.array(hf.get('radius'))
         self.nvoxels = np.array(hf.get('nvoxels'))
         if self.center_indx.ndim == 1:
             self.n_cent = self.center_indx.shape[0]
@@ -403,11 +403,11 @@ class SearchlightSurface(Searchlight):
             goodv = can_linin_sorted>-1
             can_linin_sorted = can_linin_sorted[goodv]
             can_voxdist_sorted = can_voxdist_sorted[goodv]
-            if maxvoxels is None: # take all the voxels within the radius
+            if np.isinf(maxvoxels): # take all the voxels within the radius
                 vi=can_linin_sorted
                 maxdist = can_voxdist_sorted[-1]
             else:
-                vi = can_linin_sorted[:,maxvoxels]
+                vi = can_linin_sorted[:maxvoxels]
                 maxdist = can_voxdist_sorted[maxvoxels-1]
 
             # Get the voxel numbers in the unique_lindices
