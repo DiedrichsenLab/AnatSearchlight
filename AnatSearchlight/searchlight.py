@@ -137,8 +137,10 @@ class Searchlight:
         if verbose:
             print(f"Loading data ")
         for i,v in enumerate(input_vols):
-            for j in range(self.voxel_indx.shape[1]):
-                data[i,j] = v.dataobj[self.voxel_indx[0,j],self.voxel_indx[1,j],self.voxel_indx[2,j]]
+            if verbose:
+                print(f"Volume number {i+1}")
+            D = v.get_fdata()
+            data[i,:] = D[self.voxel_indx[0],self.voxel_indx[1],self.voxel_indx[2]]
 
         # Call the mvpa function
         results = []
