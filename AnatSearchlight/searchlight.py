@@ -113,7 +113,7 @@ class Searchlight:
 
     def run(self,inputfiles,mvpa_function,function_args={},verbose=True):
         """ Conducts a searchlight analysis for all the searchlights defined in vox_list.
-
+        
         Args:
             inputfiles (list):
                 List of filenames
@@ -147,6 +147,13 @@ class Searchlight:
         for i in range(self.n_cent):
             if (np.mod(i,1000)==0) and verbose:
                 print(f"Calculating searchlight {i} of {self.n_cent}")
+            
+            if len(self.voxlist[i]) == 0: # if the center has no voxels, skip it
+                if verbose:
+                    print(f"Searchlight center {i} has no voxels, skipping")
+                results.append(np.nan)
+                continue
+
             local_data = data[:,self.voxlist[i]]
             results.append(mvpa_function(local_data,**function_args))
         results = np.array(results)
@@ -298,7 +305,7 @@ class SearchlightSurface(Searchlight):
 
 
     def define(self,surfs,mask_img,roi=None,maxradius=10,maxvoxels=np.inf,verbose=True):
-        """ Calculates the voxel_list for a Volume-based searchlight .
+        """ Calculates the voxel_list for a Volume-based searchlight.
 
         Args:
             surfs (list of strs):
@@ -319,7 +326,7 @@ class SearchlightSurface(Searchlight):
             raise ValueError("surfs must be a list")
         self.surfs = surfs
         surfaces = [nb.load(f) for f in surfs]
-
+        
 
         # Check that the surfaces are compatible
         if len(surfaces) != 2:
@@ -338,7 +345,7 @@ class SearchlightSurface(Searchlight):
         elif isinstance(mask_img,nb.Nifti1Image):
             self.mask_img = mask_img
         else:
-            raise ValueError("roi_img must be a filename or Nifti1Image")
+            raise ValueError("mask_img must be a filename or Nifti1Image")
 
         # Record definition parameters:
         self.maxradius = maxradius
@@ -381,7 +388,7 @@ class SearchlightSurface(Searchlight):
         # Compute mid-depth surface
         mid_depth = (c1 + c2) / 2
         midsurf = nno.Surface(mid_depth, f1)
-
+        
         # Define the voxel list for each searchlight center
         self.voxlist = []  # List of indices into voxel_indx
         self.voxmin = np.zeros((self.n_cent,3),dtype='int16') # Bottom left voxel
@@ -390,12 +397,16 @@ class SearchlightSurface(Searchlight):
         self.nvoxels = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
+            is_bad_center = False # some centers may not have any voxels within the radius in the mask
             if (np.mod(i,1000)==0) and verbose:
                 print(f"Processing center {i} of {self.n_cent}")
             dist_dict = midsurf.dijkstra_distance(self.center_indx[i],self.maxradius)
             can_nodes = np.array([int(k) for k,v in dist_dict.items()])
             can_dist = np.array([np.double(v) for k,v in dist_dict.items()])
             can_lindicies = lin_indices[:,can_nodes].T.flatten()  # These are the voxels numbers sorted  by distance
+            if np.all(can_lindicies==-1): # are all voxels invalid?
+                is_bad_center = True
+                print(f'Warning: no voxels found for center {i} with radius {self.maxradius}.')
             can_vox_dist = np.tile(can_dist,(self.n_points,1)).T.flatten()  # Distances to the voxels
             _,vorder = np.unique(can_lindicies,return_index=True)  # Remove duplicates and return index of closest occurrance
             vorder = np.sort(vorder)
@@ -405,20 +416,34 @@ class SearchlightSurface(Searchlight):
             goodv = can_linin_sorted>-1
             can_linin_sorted = can_linin_sorted[goodv]
             can_voxdist_sorted = can_voxdist_sorted[goodv]
-            if np.isinf(maxvoxels): # take all the voxels within the radius
-                vi=can_linin_sorted
-                maxdist = can_voxdist_sorted[-1]
+            
+            if is_bad_center is False:
+                if np.isinf(maxvoxels): # take all the voxels within the radius
+                    vi=can_linin_sorted
+                    maxdist = can_voxdist_sorted[-1]
+                else:
+                    tmp_maxvoxels = min(maxvoxels,can_linin_sorted.shape[0])
+                    vi = can_linin_sorted[:tmp_maxvoxels]
+                    maxdist = can_voxdist_sorted[tmp_maxvoxels-1]
             else:
-                vi = can_linin_sorted[:maxvoxels]
-                maxdist = can_voxdist_sorted[maxvoxels-1]
+                vi = np.array([],dtype='uint32')    # no voxels
+                maxdist = -1    # center with no neighbours
 
             # Get the voxel numbers in the unique_lindices
-            vn = np.array([np.where(unique_lindices==v)[0][0] for v in vi],dtype ='uint32')
-            self.voxlist.append(vn)
-            self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
-            self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
-            self.radius[i] = maxdist  # Maximum distance in the searchlight
-            self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
+            if is_bad_center is False:
+                vn = np.array([np.where(unique_lindices==v)[0][0] for v in vi],dtype ='uint32')
+                self.voxlist.append(vn)
+                self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
+                self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
+                self.radius[i] = maxdist  # Maximum distance in the searchlight
+                self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
+            else:
+                vn = np.array([],dtype='uint32')
+                self.voxlist.append(vn)
+                self.voxmin[i,:] = np.array([-1,-1,-1])
+                self.voxmax[i,:] = np.array([-1,-1,-1])
+                self.radius[i] = -1
+                self.nvoxels[i] = len(vn)
 
     def data_to_cifti(self,data,outfilename = None,row_names=None):
         """ Returns a CIFTI file with the results of the searchlight analysis.
@@ -445,7 +470,7 @@ class SearchlightSurface(Searchlight):
 
         header = nb.Cifti2Header.from_axes((row_axis, bm))
         cifti_img = nb.Cifti2Image(dataobj=data.T, header=header)
-
+        
         # Save if requested
         if outfilename is not None:
             nb.save(cifti_img, outfilename)
