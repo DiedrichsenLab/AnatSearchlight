@@ -417,33 +417,30 @@ class SearchlightSurface(Searchlight):
             can_linin_sorted = can_linin_sorted[goodv]
             can_voxdist_sorted = can_voxdist_sorted[goodv]
             
-            if is_bad_center is False:
+            if is_bad_center:
+                vi = np.array([],dtype='uint32')    # center has no voxels
+                maxdist = np.nan   # center with no neighbours
+                vn = np.array([],dtype='uint32')
+                self.voxlist.append(vn)
+                self.voxmin[i,:] = np.array([np.nan,np.nan,np.nan])
+                self.voxmax[i,:] = np.array([np.nan,np.nan,np.nan])
+                self.radius[i] = np.nan
+                self.nvoxels[i] = 0
+            else:
                 if np.isinf(maxvoxels): # take all the voxels within the radius
                     vi=can_linin_sorted
                     maxdist = can_voxdist_sorted[-1]
-                else:
+                else: # take the maxvoxels closest voxels to the center
                     tmp_maxvoxels = min(maxvoxels,can_linin_sorted.shape[0])
                     vi = can_linin_sorted[:tmp_maxvoxels]
                     maxdist = can_voxdist_sorted[tmp_maxvoxels-1]
-            else:
-                vi = np.array([],dtype='uint32')    # no voxels
-                maxdist = -1    # center with no neighbours
 
-            # Get the voxel numbers in the unique_lindices
-            if is_bad_center is False:
                 vn = np.array([np.where(unique_lindices==v)[0][0] for v in vi],dtype ='uint32')
                 self.voxlist.append(vn)
                 self.voxmin[i,:] = np.min(self.voxel_indx[:,vn],axis=1)
                 self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
                 self.radius[i] = maxdist  # Maximum distance in the searchlight
                 self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
-            else:
-                vn = np.array([],dtype='uint32')
-                self.voxlist.append(vn)
-                self.voxmin[i,:] = np.array([-1,-1,-1])
-                self.voxmax[i,:] = np.array([-1,-1,-1])
-                self.radius[i] = -1
-                self.nvoxels[i] = len(vn)
 
     def data_to_cifti(self,data,outfilename = None,row_names=None):
         """ Returns a CIFTI file with the results of the searchlight analysis.
