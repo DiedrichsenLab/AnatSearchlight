@@ -1,2 +1,0 @@
-Volume-based Searchlights
-============

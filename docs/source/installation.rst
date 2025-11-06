@@ -11,10 +11,10 @@ Using Git::
 
 Or use `GitHub Desktop <https://desktop.github.com/>`_.
 
-Step 2: Install Python (≥ 3.8)
+Step 2: Install Python (≥ 3.9)
 ------------------------------
 
-This project requires **Python 3.8 or later**.
+This project requires **Python 3.9 or later**.
 
 Option A: Using pyenv (Recommended on macOS/Linux)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

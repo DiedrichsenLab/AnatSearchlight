@@ -19,8 +19,7 @@ Documentation
 
    installation.rst
    getting_started.rst
-   volume_searchlights.rst
-   surface_searchlights.rst
+   example_notebooks.rst
    reference.rst
 
 Indices and tables
