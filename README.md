@@ -17,7 +17,8 @@ The code is written in python 3.9 and uses the following libraries:
 
 We are also using the surface class written by Nick Oosterhof, which was originally part of the PyMVPA project.
 
-## Example:
+## Documentation and Examples
 
-See examples/SearchlightVolume_example.ipynb for an example of how to use the `SearchlightVolume` class.
-See examples/SearchlightSurface_example.ipynb for an example of how to use the `SearchlightSurface` class.
+For detailed usage instructions, code examples, and API documentation:
+
+[**AnatSearchlight Documentation on ReadTheDocs**](https://anatsearchlight.readthedocs.io/en/latest/)
