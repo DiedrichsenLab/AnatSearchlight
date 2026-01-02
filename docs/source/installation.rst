@@ -41,7 +41,7 @@ Ensure that running::
 
     python --version
 
-reports version 3.8 or higher.
+reports version 3.9 or higher.
 
 
 Step 3: Install Dependencies
