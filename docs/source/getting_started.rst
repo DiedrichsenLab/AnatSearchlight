@@ -34,6 +34,7 @@ Example (Volume-based)
 
 ```python
 from AnatSearchlight import SearchlightVolume
+import numpy as np
 
 S = SearchlightVolume(structure='cerebellum')
 
@@ -44,8 +45,14 @@ S.define(
 )
 
 results = S.run(
-    inputfiles=['sub-01_beta-001.nii.gz', 'sub-01_beta-002.nii.gz','sub-01_beta-003.nii.gz'],
+    inputfiles=[
+        'sub-01_beta-001.nii.gz',
+        'sub-01_beta-002.nii.gz',
+        'sub-01_beta-003.nii.gz'
+    ],
     mvpa_function=my_mvpa_function
 )
 
 img = S.data_to_nifti(results)
+
+```
