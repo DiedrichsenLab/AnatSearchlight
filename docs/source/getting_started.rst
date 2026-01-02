@@ -32,7 +32,7 @@ Basic Workflow
 Example (Volume-based)
 ----------------------
 
-```python
+.. code-block:: python
 from AnatSearchlight import SearchlightVolume
 import numpy as np
 
@@ -54,5 +54,3 @@ results = S.run(
 )
 
 img = S.data_to_nifti(results)
-
-```
