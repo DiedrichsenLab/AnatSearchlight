@@ -5,7 +5,7 @@ The following example notebooks demonstrate how to use AnatSearchlight for
 volume-based and surface-based searchlight analyses.
 
 Notebooks 1 & 2 show basic usage of the SearchlightVolume and SearchlightSurface classes,
-respectively. Notebook 3 demonstrates how to perform a representational similarity analysis (RSA) in a volume-based searchlight.
+respectively. Notebook 1 additionally demonstrates how to run a representational similarity analysis (RSA) in a volume-based searchlight.
 
 .. toctree::
    :maxdepth: 1
@@ -13,4 +13,3 @@ respectively. Notebook 3 demonstrates how to perform a representational similari
 
    examples/1.SearchlightVolume_Example
    examples/2.SearchlightSurface_Example
-   examples/3.SearchlightVolume_RSA_Example

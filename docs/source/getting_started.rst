@@ -33,6 +33,7 @@ Example (Volume-based)
 ----------------------
 
 .. code-block:: python
+    
     from AnatSearchlight import SearchlightVolume
     import numpy as np
 

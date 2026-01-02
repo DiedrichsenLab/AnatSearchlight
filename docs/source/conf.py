@@ -46,5 +46,6 @@ autodoc_mock_imports = [
     "nitools",
     "h5py",
     "pandas",
-    "numpy"
+    "numpy",
+    "rsatoolbox",
 ]
