@@ -33,24 +33,24 @@ Example (Volume-based)
 ----------------------
 
 .. code-block:: python
-from AnatSearchlight import SearchlightVolume
-import numpy as np
+    from AnatSearchlight import SearchlightVolume
+    import numpy as np
 
-S = SearchlightVolume(structure='cerebellum')
+    S = SearchlightVolume(structure='cerebellum')
 
-S.define(
-    roi_img='roi.nii.gz',
-    maxradius=10,
-    maxvoxels=np.inf
-)
+    S.define(
+        roi_img='roi.nii.gz',
+        maxradius=10,
+        maxvoxels=np.inf
+    )
 
-results = S.run(
-    inputfiles=[
-        'sub-01_beta-001.nii.gz',
-        'sub-01_beta-002.nii.gz',
-        'sub-01_beta-003.nii.gz'
-    ],
-    mvpa_function=my_mvpa_function
-)
+    results = S.run(
+        inputfiles=[
+            'sub-01_beta-001.nii.gz',
+            'sub-01_beta-002.nii.gz',
+            'sub-01_beta-003.nii.gz'
+        ],
+        mvpa_function=my_mvpa_function
+    )
 
-img = S.data_to_nifti(results)
+    img = S.data_to_nifti(results)
