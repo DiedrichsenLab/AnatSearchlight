@@ -13,6 +13,7 @@ import nibabel as nb
 import nitools as nt
 import h5py # For IO with HDF5 files
 import AnatSearchlight.pymvpa_surf as nno  # Nick Oosterhof's library for dijkstra distance
+from joblib import Parallel, delayed
 
 def load(fname):
     """Loads a searchlight definition from an HDF5 file
@@ -156,8 +157,48 @@ class Searchlight:
 
             local_data = data[:,self.voxlist[i]]
             results.append(mvpa_function(local_data,**function_args))
+        # if len(mvpa_function(local_data,**function_args))>1:
+        #     results = np.array(results, dtype=object)
+        # else:
         results = np.array(results)
         return results
+
+    def run_parallel(self, inputfiles, mvpa_function, function_args={}, verbose=True, n_jobs=-1):
+        """
+        Run searchlight parallel not serial. 
+        """
+        # load data with float32 to be more efficient (float 32 instead of 64)
+        input_vols = [nb.load(f) for f in inputfiles]
+        data = np.empty((len(input_vols), self.voxel_indx.shape[1]), dtype=np.float32)
+        
+        if verbose:
+            print(f"Loading {len(input_vols)} volumes...")
+
+        for i, v in enumerate(input_vols):
+            # caching=unchanged prevents nibabel from keeping a copies in the memory 
+            data[i, :] = v.get_fdata(dtype=np.float32, caching="unchanged")[
+                                     self.voxel_indx[0], self.voxel_indx[1], self.voxel_indx[2]]
+
+        # Prepare voxel lists to not send the whole self object to each worker
+        voxlists = self.voxlist 
+
+        # 3. Define the worker function
+        def _process_one(i):
+            v_idx = voxlists[i]
+            if len(v_idx) == 0:
+                return np.nan
+            # joblib seemingly memmaps 'data' automatically in the backend
+            return mvpa_function(data[:, v_idx], **function_args)
+
+        if verbose:
+            print(f"Running searchlight on {self.n_cent} centers...")
+
+        # Run in parallel
+        with Parallel(n_jobs=-1, batch_size=100, verbose=10) as parallel:
+            results = parallel(delayed(_process_one)(i) for i in range(self.n_cent))
+
+        return np.array(results)
+
 
 class SearchlightVolume(Searchlight):
     """ Anatomically informed searchlights for 3d volumes, given an ROI image.
