@@ -182,7 +182,7 @@ class Searchlight:
         # Prepare voxel lists to not send the whole self object to each worker
         voxlists = self.voxlist 
 
-        # 3. Define the worker function
+        # define the function for the workers
         def _process_one(i):
             v_idx = voxlists[i]
             if len(v_idx) == 0:
