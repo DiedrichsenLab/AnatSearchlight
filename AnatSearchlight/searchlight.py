@@ -14,7 +14,7 @@ import nitools as nt
 import h5py # For IO with HDF5 files
 import AnatSearchlight.pymvpa_surf as nno  # Nick Oosterhof's library for dijkstra distance
 
-def load(fname):
+def load(fname, single=False, idx=None):
     """Loads a searchlight definition from an HDF5 file
 
     Args:
@@ -31,9 +31,13 @@ def load(fname):
             S = SearchlightSurface(structure)
         else:
             raise ValueError(f"Classname {classname} not recognized")
-        S.load(hf)
+        if single:
+            S.load_single(hf, idx)
+        else:
+            S.load(hf)
         hf.close()
     return S
+
 
 class Searchlight:
     """Base class for searchlight analyses. This class implements the basic behaviors of a searchlight.
@@ -85,6 +89,11 @@ class Searchlight:
         if self.classname == 'SearchlightSurface':
             self.n_vertices = np.array(hf.get('n_vertices')) # Affine matrix for functional space
 
+    def load_single(self, hf, idx):
+        self.affine = np.array(hf.get('affine'))  # Affine matrix for functional space
+        self.shape = np.array(hf.get('shape'))  # shape of functional image
+        self.voxel_indx = np.array(hf.get('voxel_indx'))  # voxel indices of candidate voxels
+        self.voxlist = np.array(np.array(hf.get(f'voxlist/voxlist_{idx}')))
 
     def save(self,fname):
         """Saves the defined searchlight definition to hd5 file
@@ -320,7 +329,6 @@ class SearchlightSurface(Searchlight):
         self.surfs = surfs
         surfaces = [nb.load(f) for f in surfs]
 
-
         # Check that the surfaces are compatible
         if len(surfaces) != 2:
             raise ValueError("surfs must contain exactly two surfaces")
@@ -390,8 +398,6 @@ class SearchlightSurface(Searchlight):
         self.nvoxels = np.zeros(self.n_cent)
 
         for i in range(self.n_cent):
-            if (np.mod(i,1000)==0) and verbose:
-                print(f"Processing center {i} of {self.n_cent}")
             dist_dict = midsurf.dijkstra_distance(self.center_indx[i],self.maxradius)
             can_nodes = np.array([int(k) for k,v in dist_dict.items()])
             can_dist = np.array([np.double(v) for k,v in dist_dict.items()])
@@ -405,12 +411,21 @@ class SearchlightSurface(Searchlight):
             goodv = can_linin_sorted>-1
             can_linin_sorted = can_linin_sorted[goodv]
             can_voxdist_sorted = can_voxdist_sorted[goodv]
+            # >>> if there are no voxels in searchlight
+            if can_linin_sorted.size == 0:
+                self.voxlist.append(np.array([], dtype='uint32'))
+                self.voxmin[i, :] = np.array([-1, -1, -1]) #np.array([np.nan, np.nan, np.nan])
+                self.voxmax[i, :] = np.array([-1, -1, -1]) #np.array([np.nan, np.nan, np.nan])
+                self.radius[i] = np.nan
+                self.nvoxels[i] = np.nan   # set to nan or mean count will be biased
+                continue
+            # <<<
             if np.isinf(maxvoxels): # take all the voxels within the radius
                 vi=can_linin_sorted
                 maxdist = can_voxdist_sorted[-1]
             else:
                 vi = can_linin_sorted[:maxvoxels]
-                maxdist = can_voxdist_sorted[maxvoxels-1]
+                maxdist = can_voxdist_sorted[len(vi)-1]
 
             # Get the voxel numbers in the unique_lindices
             vn = np.array([np.where(unique_lindices==v)[0][0] for v in vi],dtype ='uint32')
@@ -419,6 +434,9 @@ class SearchlightSurface(Searchlight):
             self.voxmax[i,:] = np.max(self.voxel_indx[:,vn],axis=1)
             self.radius[i] = maxdist  # Maximum distance in the searchlight
             self.nvoxels[i] = len(vn)  # Number of voxels in the searchlight
+
+            if (np.mod(i,1000)==0) and verbose:
+                print(f"Processing center {i} of {self.n_cent}, size={maxdist}, n voxels={len(vn)}")
 
     def data_to_cifti(self,data,outfilename = None,row_names=None):
         """ Returns a CIFTI file with the results of the searchlight analysis.
