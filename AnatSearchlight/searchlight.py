@@ -413,6 +413,7 @@ class SearchlightSurface(Searchlight):
             can_voxdist_sorted = can_voxdist_sorted[goodv]
             # >>> if there are no voxels in searchlight
             if can_linin_sorted.size == 0:
+                print(f"No voxels for center {i} of {self.n_cent}")
                 self.voxlist.append(np.array([], dtype='uint32'))
                 self.voxmin[i, :] = np.array([-1, -1, -1]) #np.array([np.nan, np.nan, np.nan])
                 self.voxmax[i, :] = np.array([-1, -1, -1]) #np.array([np.nan, np.nan, np.nan])
