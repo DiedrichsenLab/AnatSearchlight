@@ -9,7 +9,7 @@ The toolbox is meant to be complementary to the existing `RSA Python toolbox <ht
 
 Licence and Acknowledgements
 ----------------------------
-The software written and maintained by members of the Diedrichsen lab and collaborators (Bassel Arafat, Ali Ghavampour, Marco Emmanuel, Sivan Jossinger & Jorn Diedrichsen). The software distributed under the MIT License: The software is provided as is, without any warranty.
+The software written and maintained by members of the Diedrichsen lab and collaborators (Bassel Arafat, Ali Ghavampour, Marco Emanuele, Sivan Jossinger & Jorn Diedrichsen). The software distributed under the MIT License: The software is provided as is, without any warranty.
 
 Documentation
 -------------
