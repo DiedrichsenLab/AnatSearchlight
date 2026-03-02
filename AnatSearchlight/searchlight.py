@@ -90,6 +90,7 @@ class Searchlight:
             self.n_vertices = np.array(hf.get('n_vertices')) # Affine matrix for functional space
 
     def load_single(self, hf, idx):
+        """Loads a single searchlight (idx) from HDF5 file"""
         self.affine = np.array(hf.get('affine'))  # Affine matrix for functional space
         self.shape = np.array(hf.get('shape'))  # shape of functional image
         self.voxel_indx = np.array(hf.get('voxel_indx'))  # voxel indices of candidate voxels
