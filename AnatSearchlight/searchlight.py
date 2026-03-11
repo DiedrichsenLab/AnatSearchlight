@@ -12,6 +12,7 @@ import pandas as pd
 import nibabel as nb
 import nitools as nt
 import h5py # For IO with HDF5 files
+from os import PathLike
 import AnatSearchlight.pymvpa_surf as nno  # Nick Oosterhof's library for dijkstra distance
 
 def load(fname, single=False, idx=None):
@@ -79,6 +80,7 @@ class Searchlight:
         for i in range(len(hf.get('voxlist'))):
             self.voxlist.append(np.array(hf.get(f'voxlist/voxlist_{i}')))
         self.voxmin = np.array(hf.get('voxmin'))
+        self.structure = hf.get('structure').asstr()[()]
         self.voxmax = np.array(hf.get('voxmax'))
         self.radius = np.array(hf.get('radius'))
         self.nvoxels = np.array(hf.get('nvoxels'))
@@ -161,6 +163,49 @@ class Searchlight:
             results.append(mvpa_function(local_data,**function_args))
         results = np.array(results)
         return results
+
+    def run_parallel(self, inputfiles, mvpa_function, function_args={}, nargout=1, verbose=True, n_jobs=8):
+        """
+        Run searchlight parallel not serial. 
+        """
+        # load data with float32 to be more efficient (float 32 instead of 64)
+        if isinstance(inputfiles, PathLike):
+            inputfiles = nb.load(inputfiles)
+        if isinstance(inputfiles, nb.Cifti2Image):
+            inputfiles = nt.volume_from_cifti(inputfiles, struct_names=self.structure)
+        if isinstance(inputfiles, nb.Nifti2Image):
+            vol = inputfiles.get_fdata(dtype=np.float32, caching="unchanged")
+            data = vol[self.voxel_indx[0], self.voxel_indx[1], self.voxel_indx[2]].T
+        if isinstance(inputfiles, list):
+            input_vols = [nb.load(f) for f in inputfiles]
+            if verbose:
+                print(f"Loading {len(input_vols)} volumes...")
+            data = np.empty((len(input_vols), self.voxel_indx.shape[1]), dtype=np.float32)
+            for i, v in enumerate(input_vols):
+                # caching=unchanged prevents nibabel from keeping a copies in the memory 
+                data[i, :] = v.get_fdata(dtype=np.float32, caching="unchanged")[
+                                        self.voxel_indx[0], self.voxel_indx[1], self.voxel_indx[2]]
+
+        # Prepare voxel lists to not send the whole self object to each worker
+        voxlists = self.voxlist 
+
+        # define the function for the workers
+        def _process_one(i):
+            v_idx = voxlists[i]
+            if len(v_idx) == 0:
+                return np.nan if nargout==1 else np.full(nargout, np.nan, dtype=float)
+            # joblib seemingly memmaps 'data' automatically in the backend
+            return mvpa_function(data[:, v_idx], **function_args)
+
+        if verbose:
+            print(f"Running searchlight on {self.n_cent} centers...")
+
+        # Run in parallel
+        with Parallel(n_jobs=n_jobs, batch_size=100, verbose=10) as parallel:
+            results = parallel(delayed(_process_one)(i) for i in range(self.n_cent))
+
+        return np.array(results)
+
 
 class SearchlightVolume(Searchlight):
     """ Anatomically informed searchlights for 3d volumes, given an ROI image.
