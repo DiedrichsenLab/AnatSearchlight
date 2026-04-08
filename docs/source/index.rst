@@ -1,11 +1,11 @@
 .. Searchlight index
 
-Anatomical Searchlight-based Analysis
-=======================================
+Anatomically informed searchlight analysis
+===========================================
 
 The AnatSearchlight toolbox provides a framework to run searchlight-based multivariate pattern analysis (MVPA) on fMRI data. The toolbox supports both volume and surface-based searchlight definition.
 
-The toolbox is meant to be complementary to the existing `RSA Python toolbox <https://github.com/rsagroup/rsatoolbox>`_, allowing the application of RSA functions in a searchlight manner.
+The toolbox is meant to be work plug-and-play with the `RSA Python toolbox <https://github.com/rsagroup/rsatoolbox>`_, or the `Pattern component toolbox <https://github.com/diedrichsenlab/PcmPy>`_allowing the application of RSA functions in a searchlight manner. 
 
 Licence and Acknowledgements
 ----------------------------
