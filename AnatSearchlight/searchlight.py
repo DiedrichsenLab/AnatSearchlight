@@ -13,6 +13,7 @@ import nibabel as nb
 import nitools as nt
 import h5py # For IO with HDF5 files
 from os import PathLike
+from joblib import Parallel, delayed
 import AnatSearchlight.pymvpa_surf as nno  # Nick Oosterhof's library for dijkstra distance
 
 def load(fname, single=False, idx=None):
